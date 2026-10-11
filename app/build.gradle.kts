@@ -22,8 +22,8 @@ android {
         applicationId = "space.megaworld.claudeusage"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.16.2"
+        versionCode = 29
+        versionName = "0.16.3"
     }
 
     signingConfigs {

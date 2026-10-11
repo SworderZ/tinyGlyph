@@ -179,6 +179,7 @@ private fun AppRoot(onOpenLogin: () -> Unit, onOpenManualLogin: () -> Unit) {
                             onSelectWidgetProvider = viewModel::setWidgetProvider,
                             onSelectOrganization = viewModel::selectOrganization,
                             onSelectInterval = viewModel::setRefreshInterval,
+                            onSetNightSchedule = viewModel::setNightSchedule,
                             onReloadOrganizations = viewModel::reloadOrganizations,
                         )
                     }

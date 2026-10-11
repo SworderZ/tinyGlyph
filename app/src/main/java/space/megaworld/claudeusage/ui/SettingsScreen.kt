@@ -1,5 +1,6 @@
 package space.megaworld.claudeusage.ui
 
+import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import space.megaworld.claudeusage.data.SettingsStore
+import space.megaworld.claudeusage.data.NightSchedule
 import space.megaworld.claudeusage.data.UsageProvider
 import space.megaworld.claudeusage.data.UsageState
 import space.megaworld.claudeusage.glyph.UsageForegroundService
@@ -26,7 +28,8 @@ import space.megaworld.claudeusage.R
 @Composable
 fun SettingsScreen(state: UsageState, busy: Boolean,
     onSelectWidgetProvider: (UsageProvider) -> Unit, onSelectOrganization: (String) -> Unit,
-    onSelectInterval: (Int) -> Unit, onReloadOrganizations: () -> Unit,
+    onSelectInterval: (Int) -> Unit, onSetNightSchedule: (NightSchedule) -> Unit,
+    onReloadOrganizations: () -> Unit,
 ) {
     Scaffold(topBar = { AppTopBar("Настройки", "Виджет и обновление данных") }) { padding ->
         ScreenColumn(padding) {
@@ -46,6 +49,7 @@ fun SettingsScreen(state: UsageState, busy: Boolean,
                 SupportingText("Обновляются лимиты в приложении и во всех ваших виджетах.")
                 ExactAlarmNotice(state.refreshIntervalMinutes)
             }
+            NightScheduleCard(state.nightSchedule, busy, onSetNightSchedule)
             if (state.provider == UsageProvider.CLAUDE) {
                 SectionCard {
                     Text("Организация Claude", style = MaterialTheme.typography.titleMedium)
@@ -67,6 +71,48 @@ fun SettingsScreen(state: UsageState, busy: Boolean,
             }
             AboutSettingsCard()
         }
+    }
+}
+
+@Composable
+private fun NightScheduleCard(schedule: NightSchedule, busy: Boolean, onChange: (NightSchedule) -> Unit) {
+    val context = LocalContext.current
+    SectionCard {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Ночной режим Glyph", style = MaterialTheme.typography.titleMedium)
+                SupportingText(if (schedule.enabled) {
+                    "Подсветка выключена с ${schedule.timeLabel(schedule.startMinutes)} до ${schedule.timeLabel(schedule.endMinutes)}"
+                } else "Автоматически гасит лампочки на ночь")
+            }
+            Switch(schedule.enabled, enabled = !busy, onCheckedChange = { onChange(schedule.copy(enabled = it)) })
+        }
+        if (schedule.enabled) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TimeButton("С ${schedule.timeLabel(schedule.startMinutes)}", schedule.startMinutes, busy, context,
+                    modifier = Modifier.weight(1f)) { minutes ->
+                    onChange(schedule.copy(startMinutes = minutes))
+                }
+                TimeButton("До ${schedule.timeLabel(schedule.endMinutes)}", schedule.endMinutes, busy, context,
+                    modifier = Modifier.weight(1f)) { minutes ->
+                    onChange(schedule.copy(endMinutes = minutes))
+                }
+            }
+            SupportingText("Расписание работает по местному времени телефона и повторяется каждый день.")
+        }
+    }
+}
+
+@Composable
+private fun TimeButton(label: String, minutes: Int, busy: Boolean, context: android.content.Context,
+    modifier: Modifier = Modifier,
+    onSelected: (Int) -> Unit) {
+    OutlinedButton(onClick = {
+        TimePickerDialog(context, { _, hour, minute -> onSelected(hour * 60 + minute) },
+            minutes / 60, minutes % 60, true).show()
+    }, enabled = !busy, modifier = modifier.heightIn(min = 48.dp)) {
+        Text(label)
     }
 }
 

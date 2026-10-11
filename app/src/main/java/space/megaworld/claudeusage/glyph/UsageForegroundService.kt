@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -89,6 +90,11 @@ class UsageForegroundService : Service() {
         // Текст берём из последнего известного состояния: «Запуск…» на каждый
         // onStartCommand затирал бы живой статус при каждом тике будильника.
         startForegroundCompat(buildNotification(lastState?.let(::statusText) ?: "Запуск…"))
+        if (intent?.action == ACTION_DISABLE_GLYPH) {
+            glyph.turnOff()
+            scope.launch { AppGraph.get(applicationContext).settingsStore.setGlyphEnabled(false) }
+            return START_STICKY
+        }
         if (!started) {
             started = true
             observeState()
@@ -104,6 +110,13 @@ class UsageForegroundService : Service() {
                 scheduleAmbientTick()
                 lastState?.let { notify(buildNotification(statusText(it))) }
             }
+            ACTION_NIGHT_TICK -> {
+                lastState?.let {
+                    updateGlyphForTime(it)
+                    scheduleNightTick()
+                    notify(buildNotification(statusText(it)))
+                }
+            }
             else -> scheduleNextTick()
         }
         return START_STICKY
@@ -116,6 +129,7 @@ class UsageForegroundService : Service() {
         channelPreviewJob?.cancel()
         cancelTick()
         cancelAmbientTick()
+        cancelNightTick()
         if (idleTracking) {
             idleTracker.stop()
             idleTracking = false
@@ -140,9 +154,10 @@ class UsageForegroundService : Service() {
             repository.state.collect { state ->
                 lastState = state
 
-                val wantsGlyph = state.glyphEnabled && glyph.isSupportedDevice
+                val wantsGlyph = state.glyphEnabled && !state.nightSchedule.isQuietNow() && glyph.isSupportedDevice
                 val wantsFastRefresh = state.refreshIntervalMinutes < WORKMANAGER_FLOOR_MINUTES
-                if (!wantsGlyph && !wantsFastRefresh) {
+                val needsNightSchedule = state.glyphEnabled && state.nightSchedule.enabled
+                if (!wantsGlyph && !wantsFastRefresh && !needsNightSchedule) {
                     // Ни полоса, ни частое обновление больше не нужны — незачем
                     // держать уведомление в шторке.
                     stopSelf()
@@ -161,6 +176,7 @@ class UsageForegroundService : Service() {
                     scheduleNextTick()
                 }
                 scheduleAmbientTick()
+                scheduleNightTick()
                 notify(buildNotification(glyphError ?: statusText(state)))
             }
         }
@@ -188,6 +204,11 @@ class UsageForegroundService : Service() {
             idleTracking = true
         }
         glyph.show(frameFor(state))
+    }
+
+    private fun updateGlyphForTime(state: UsageState) {
+        val wantsGlyph = state.glyphEnabled && !state.nightSchedule.isQuietNow() && glyph.isSupportedDevice
+        runCatching { driveGlyph(state, wantsGlyph) }
     }
 
     /**
@@ -330,10 +351,35 @@ class UsageForegroundService : Service() {
         getSystemService(AlarmManager::class.java)?.cancel(ambientTickIntent(this))
     }
 
+    private fun scheduleNightTick() {
+        val schedule = lastState?.takeIf { it.glyphEnabled }?.nightSchedule?.takeIf { it.enabled } ?: run {
+            cancelNightTick()
+            return
+        }
+        val manager = getSystemService(AlarmManager::class.java) ?: return
+        val pending = nightTickIntent(this)
+        val at = schedule.nextBoundaryMillis()
+        try {
+            if (canScheduleExact(this)) {
+                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+            } else {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+            }
+        } catch (_: SecurityException) {
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+        }
+    }
+
+    private fun cancelNightTick() {
+        getSystemService(AlarmManager::class.java)?.cancel(nightTickIntent(this))
+    }
+
     private fun statusText(state: UsageState): String {
         glyph.lastError?.let { if (state.glyphEnabled) return it }
         val percent = state.snapshot?.fiveHour?.utilization?.roundToInt()
         val head = when {
+            state.glyphEnabled && state.nightSchedule.isQuietNow() ->
+                "Glyph: ночной режим до ${state.nightSchedule.timeLabel(state.nightSchedule.endMinutes)}"
             !state.glyphEnabled || state.ambient.stripMode == GlyphStripMode.USAGE ->
                 state.provider.displayLabel() + " · " + if (percent == null) "Нет данных" else "5ч: $percent%"
             state.ambient.stripMode == GlyphStripMode.RAIN -> state.rainForecast?.let {
@@ -388,7 +434,7 @@ class UsageForegroundService : Service() {
             packageManager.getLaunchIntentForPackage(packageName),
             PendingIntent.FLAG_IMMUTABLE,
         )
-        return Notification.Builder(this, CHANNEL_ID)
+        val builder = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
@@ -396,7 +442,14 @@ class UsageForegroundService : Service() {
             .setSmallIcon(R.drawable.ic_notification_glyph)
             .setContentIntent(open)
             .setOngoing(true)
-            .build()
+        if (lastState?.glyphEnabled == true) {
+            builder.addAction(Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_close),
+                "Выключить Glyph",
+                disableGlyphIntent(this),
+            ).build())
+        }
+        return builder.build()
     }
 
     private fun createChannel() {
@@ -419,11 +472,15 @@ class UsageForegroundService : Service() {
         private const val ACTION_STOP = "space.megaworld.claudeusage.STOP_SERVICE"
         private const val ACTION_TICK = "space.megaworld.claudeusage.TICK"
         private const val ACTION_AMBIENT_TICK = "space.megaworld.claudeusage.AMBIENT_TICK"
+        private const val ACTION_NIGHT_TICK = "space.megaworld.claudeusage.NIGHT_TICK"
         private const val ACTION_TEST_CHANNEL = "space.megaworld.claudeusage.TEST_CHANNEL"
+        private const val ACTION_DISABLE_GLYPH = "space.megaworld.claudeusage.DISABLE_GLYPH"
         private const val EXTRA_TEST_CHANNEL = "glyph_test_channel"
         private const val CHANNEL_PREVIEW_MILLIS = 5_000L
         private const val TICK_REQUEST = 7
         private const val AMBIENT_REQUEST = 8
+        private const val NIGHT_REQUEST = 9
+        private const val DISABLE_REQUEST = 10
 
         private fun ambientTickIntent(context: Context): PendingIntent {
             val intent = Intent(context, UsageForegroundService::class.java)
@@ -442,6 +499,22 @@ class UsageForegroundService : Service() {
                 context,
                 TICK_REQUEST,
                 intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        private fun nightTickIntent(context: Context): PendingIntent {
+            val intent = Intent(context, UsageForegroundService::class.java).setAction(ACTION_NIGHT_TICK)
+            return PendingIntent.getService(
+                context, NIGHT_REQUEST, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        private fun disableGlyphIntent(context: Context): PendingIntent {
+            val intent = Intent(context, UsageForegroundService::class.java).setAction(ACTION_DISABLE_GLYPH)
+            return PendingIntent.getService(
+                context, DISABLE_REQUEST, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }

@@ -108,6 +108,28 @@ class SettingsStore internal constructor(private val dataStore: DataStore<Prefer
         dataStore.edit { it[KEY_GLYPH_ENABLED] = enabled }
     }
 
+    val nightSchedule: Flow<NightSchedule> = dataStore.data.map { prefs ->
+        NightSchedule(
+            enabled = prefs[KEY_NIGHT_ENABLED] ?: false,
+            startMinutes = prefs[KEY_NIGHT_START]?.takeIf(NightSchedule::validMinutes)
+                ?: NightSchedule.DEFAULT_START_MINUTES,
+            endMinutes = prefs[KEY_NIGHT_END]?.takeIf(NightSchedule::validMinutes)
+                ?: NightSchedule.DEFAULT_END_MINUTES,
+        )
+    }
+
+    suspend fun setNightSchedule(schedule: NightSchedule) {
+        val safeStart = schedule.startMinutes.takeIf(NightSchedule::validMinutes)
+            ?: NightSchedule.DEFAULT_START_MINUTES
+        val safeEnd = schedule.endMinutes.takeIf(NightSchedule::validMinutes)
+            ?: NightSchedule.DEFAULT_END_MINUTES
+        dataStore.edit {
+            it[KEY_NIGHT_ENABLED] = schedule.enabled
+            it[KEY_NIGHT_START] = safeStart
+            it[KEY_NIGHT_END] = safeEnd
+        }
+    }
+
     val glyphRenderMode: Flow<GlyphRenderMode> = dataStore.data.map { prefs ->
         prefs[KEY_GLYPH_MODE]
             ?.let { raw -> runCatching { GlyphRenderMode.valueOf(raw) }.getOrNull() }
@@ -289,6 +311,9 @@ class SettingsStore internal constructor(private val dataStore: DataStore<Prefer
         private val KEY_ORGS = stringPreferencesKey("organizations")
         private val KEY_INTERVAL = intPreferencesKey("refresh_interval_minutes")
         private val KEY_GLYPH_ENABLED = booleanPreferencesKey("glyph_enabled")
+        private val KEY_NIGHT_ENABLED = booleanPreferencesKey("glyph_night_enabled")
+        private val KEY_NIGHT_START = intPreferencesKey("glyph_night_start_minutes")
+        private val KEY_NIGHT_END = intPreferencesKey("glyph_night_end_minutes")
         private val KEY_GLYPH_MODE = stringPreferencesKey("glyph_render_mode")
         private val KEY_STRIP_MODE = stringPreferencesKey("glyph_strip_mode")
         private val KEY_CHANNEL_A_MODE = stringPreferencesKey("glyph_channel_a_mode")

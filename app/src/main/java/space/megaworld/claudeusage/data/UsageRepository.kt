@@ -78,6 +78,8 @@ class UsageRepository(
                 state.copy(ambient = ambient.settings, rainForecast = ambient.forecast)
             }.combine(settingsStore.widgetProvider) { state, widgetProvider ->
                 state.copy(widgetProvider = widgetProvider)
+            }.combine(settingsStore.nightSchedule) { state, nightSchedule ->
+                state.copy(nightSchedule = nightSchedule)
             }
         }
 
@@ -231,6 +233,10 @@ class UsageRepository(
 
     suspend fun setGlyphEnabled(enabled: Boolean) {
         settingsStore.setGlyphEnabled(enabled)
+    }
+
+    suspend fun setNightSchedule(schedule: NightSchedule) {
+        settingsStore.setNightSchedule(schedule)
     }
 
     suspend fun setGlyphRenderMode(mode: GlyphRenderMode) {

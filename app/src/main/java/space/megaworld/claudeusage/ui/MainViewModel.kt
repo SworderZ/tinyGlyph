@@ -20,6 +20,7 @@ import space.megaworld.claudeusage.data.GlyphChannelMode
 import space.megaworld.claudeusage.data.GlyphStripMode
 import space.megaworld.claudeusage.data.ApiResult
 import space.megaworld.claudeusage.data.GlyphRenderMode
+import space.megaworld.claudeusage.data.NightSchedule
 import space.megaworld.claudeusage.data.RefreshResult
 import space.megaworld.claudeusage.data.UsageProvider
 import space.megaworld.claudeusage.data.UsageState
@@ -88,6 +89,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setGlyphEnabled(enabled: Boolean) = runBusy {
         graph.usageRepository.setGlyphEnabled(enabled)
+    }
+
+    fun setNightSchedule(schedule: NightSchedule) = runBusy {
+        graph.usageRepository.setNightSchedule(schedule)
     }
 
     fun setGlyphRenderMode(mode: GlyphRenderMode) = runBusy {

@@ -17,6 +17,8 @@ and time with the screen off.
 - Use strip C for AI usage, rain probability, or Off.
 - Save multiple cities and switch between their weather forecasts.
 - A persistent notification shows the current Glyph state and last update.
+- The Glyph notification has a one-tap action to turn the lights off.
+- Set a recurring local-time night schedule in Settings to keep Glyph dark while you sleep.
 - An About page in Settings shows the installed version, credits, source code, and release links.
 
 ## Getting started

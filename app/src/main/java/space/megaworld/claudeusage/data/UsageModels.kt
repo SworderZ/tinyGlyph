@@ -1,6 +1,7 @@
 package space.megaworld.claudeusage.data
 
 import kotlinx.serialization.Serializable
+import java.util.Calendar
 
 /** Организация claude.ai. Поля nullable: ответ неофициального API может измениться. */
 @Serializable
@@ -77,6 +78,54 @@ enum class UsageStatus {
     NETWORK_ERROR,
 }
 
+/** Local-time window during which Glyph stays dark. The range may cross midnight. */
+@Serializable
+data class NightSchedule(
+    val enabled: Boolean = false,
+    val startMinutes: Int = DEFAULT_START_MINUTES,
+    val endMinutes: Int = DEFAULT_END_MINUTES,
+) {
+    fun isQuietAtMinutes(minutes: Int): Boolean {
+        if (!enabled) return false
+        val current = minutes.coerceIn(0, MINUTES_PER_DAY - 1)
+        return if (startMinutes > endMinutes) {
+            current >= startMinutes || current < endMinutes
+        } else {
+            current >= startMinutes && current < endMinutes
+        }
+    }
+
+    fun isQuietNow(nowMillis: Long = System.currentTimeMillis()): Boolean {
+        val calendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        return isQuietAtMinutes(calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE))
+    }
+
+    fun nextBoundaryMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        val target = if (isQuietAtMinutes(currentMinutes)) endMinutes else startMinutes
+        val boundary = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.HOUR_OF_DAY, target / 60)
+            set(Calendar.MINUTE, target % 60)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= nowMillis) add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return boundary.timeInMillis
+    }
+
+    fun timeLabel(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
+
+    companion object {
+        const val MINUTES_PER_DAY = 24 * 60
+        const val DEFAULT_START_MINUTES = 23 * 60
+        const val DEFAULT_END_MINUTES = 7 * 60
+
+        fun validMinutes(minutes: Int) = minutes in 0 until MINUTES_PER_DAY
+    }
+}
+
 /** Полное состояние, которым питаются и виджет, и главный экран. */
 data class UsageState(
     val status: UsageStatus = UsageStatus.NOT_AUTHORIZED,
@@ -91,6 +140,7 @@ data class UsageState(
     val glyphRenderMode: GlyphRenderMode = GlyphRenderMode.PROGRESS,
     val ambient: AmbientSettings = AmbientSettings(),
     val rainForecast: RainForecast? = null,
+    val nightSchedule: NightSchedule = NightSchedule(),
 ) {
     val hasData: Boolean get() = snapshot != null && snapshot.windows.isNotEmpty()
     val isStale: Boolean get() = status == UsageStatus.NETWORK_ERROR || status == UsageStatus.SESSION_EXPIRED

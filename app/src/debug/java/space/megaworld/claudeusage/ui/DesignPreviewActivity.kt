@@ -43,7 +43,8 @@ class DesignPreviewActivity : ComponentActivity() {
             organizationUuid = "d98709e5-78f0-4a16-9a23-11110000abcd", glyphEnabled = true,
             ambient = AmbientSettings(channelA = GlyphChannelMode.IDLE, channelB = GlyphChannelMode.RAIN,
                 stripMode = GlyphStripMode.RAIN, place = cities.first(), places = cities),
-            rainForecast = RainForecast(70,now))
+            rainForecast = RainForecast(70,now),
+            nightSchedule = NightSchedule(enabled = true))
         setContent {
             var state by remember { mutableStateOf(initial) }
             var screen by remember { mutableStateOf(runCatching { Screen.valueOf(page) }.getOrDefault(Screen.MAIN)) }
@@ -73,7 +74,8 @@ class DesignPreviewActivity : ComponentActivity() {
                                 Screen.SETTINGS -> SettingsScreen(state,false,
                                     onSelectWidgetProvider = { state = state.copy(widgetProvider = it) },
                                     onSelectOrganization = { state = state.copy(organizationUuid = it) },
-                                    onSelectInterval = { state = state.copy(refreshIntervalMinutes = it) }, onReloadOrganizations = {})
+                                    onSelectInterval = { state = state.copy(refreshIntervalMinutes = it) },
+                                    onSetNightSchedule = { state = state.copy(nightSchedule = it) }, onReloadOrganizations = {})
                                 Screen.GLYPH -> GlyphScreen(state,false,null,{},
                                     onToggleGlyph = { state = state.copy(glyphEnabled = it) },
                                     onSelectGlyphMode = { state = state.copy(glyphRenderMode = it) },
