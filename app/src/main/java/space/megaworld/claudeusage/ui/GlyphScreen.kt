@@ -19,6 +19,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -29,12 +31,14 @@ import space.megaworld.claudeusage.R
 import space.megaworld.claudeusage.data.*
 import space.megaworld.claudeusage.glyph.GlyphSupport
 import space.megaworld.claudeusage.glyph.UsageForegroundService
+import kotlin.math.roundToInt
 
 @Composable
 fun GlyphScreen(
     state: UsageState, busy: Boolean, message: String?, onDismissMessage: () -> Unit,
     onToggleGlyph: (Boolean) -> Unit, onSelectGlyphMode: (GlyphRenderMode) -> Unit,
     onSelectStripMode: (GlyphStripMode) -> Unit,
+    onSetStripBrightness: (Int) -> Unit,
     onSelectChannelMode: (AmbientChannel, GlyphChannelMode) -> Unit,
     onTestChannel: (AmbientChannel) -> Unit, onSelectIdleMinutes: (Int) -> Unit,
     onAddPlace: (String) -> Unit, onSelectPlace: (WeatherPlace) -> Unit,
@@ -63,7 +67,7 @@ fun GlyphScreen(
             BusyLine(busy)
             if (!message.isNullOrBlank()) MessageCard(message, onDismiss = onDismissMessage)
             if (state.glyphEnabled) {
-                StripCard(state, busy, onSelectStripMode)
+                StripCard(state, busy, onSelectStripMode, onSetStripBrightness)
                 AmbientChannel.entries.forEach { channel ->
                     ChannelCard(channel, state.ambient.modeFor(channel), !busy,
                         onSelect = { onSelectChannelMode(channel, it) }, onTest = { onTestChannel(channel) })
@@ -143,7 +147,8 @@ private fun ChannelCard(channel: AmbientChannel, selected: GlyphChannelMode, ena
 }
 
 @Composable
-private fun StripCard(state: UsageState, busy: Boolean, onSelect: (GlyphStripMode) -> Unit) {
+private fun StripCard(state: UsageState, busy: Boolean, onSelect: (GlyphStripMode) -> Unit,
+    onSetBrightness: (Int) -> Unit) {
     val mode = state.ambient.stripMode
     val percent = state.ambient.stripPercent(state.snapshot?.fiveHour?.utilization, state.rainForecast?.probabilityPercent)
     SectionCard {
@@ -164,6 +169,22 @@ private fun StripCard(state: UsageState, busy: Boolean, onSelect: (GlyphStripMod
         } else if (mode != GlyphStripMode.OFF && (mode != GlyphStripMode.RAIN || state.ambient.place != null)) {
             CenteredSupportingText(if (mode == GlyphStripMode.USAGE) "Данные о лимите ещё не загружены." else "Прогноз ещё не загружен.")
         }
+        HorizontalDivider()
+        var brightness by remember(state.ambient.stripBrightnessPercent) {
+            mutableFloatStateOf(state.ambient.stripBrightnessPercent.toFloat())
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Яркость C", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("${brightness.roundToInt()}%", style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary)
+        }
+        Slider(value = brightness, onValueChange = { brightness = it },
+            onValueChangeFinished = { onSetBrightness(brightness.roundToInt()) },
+            valueRange = 0f..100f, steps = 19, enabled = !busy,
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Яркость полосы C" })
+        CenteredSupportingText(if (brightness.roundToInt() == 0) "При 0% полоса C погашена."
+            else "Выбранная яркость сохраняется после перезапуска.")
     }
 }
 

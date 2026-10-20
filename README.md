@@ -15,6 +15,7 @@ and time with the screen off.
 - Claude uses orange accents; GPT uses white accents on a dark background.
 - Assign rain probability, screen-off time, or Off independently to channels A and B.
 - Use strip C for AI usage, rain probability, or Off.
+- Adjust strip C brightness from 0% to 100% in the Glyph tab; the setting is saved for both usage and weather.
 - Save multiple cities and switch between their weather forecasts.
 - A persistent notification shows the current Glyph state and last update.
 - The Glyph notification has a one-tap action to turn the lights off.

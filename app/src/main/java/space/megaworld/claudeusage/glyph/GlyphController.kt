@@ -6,6 +6,7 @@ import android.util.Log
 import com.nothing.ketchum.Common
 import com.nothing.ketchum.Glyph
 import com.nothing.ketchum.GlyphException
+import com.nothing.ketchum.GlyphFrame
 import com.nothing.ketchum.GlyphManager
 import space.megaworld.claudeusage.data.GlyphLight
 import space.megaworld.claudeusage.data.GlyphRenderMode
@@ -53,9 +54,12 @@ class GlyphController(context: Context) {
         val mode: GlyphRenderMode = GlyphRenderMode.PROGRESS,
         val aLight: Int = GlyphLight.OFF,
         val bLight: Int = GlyphLight.OFF,
+        val cLight: Int = GlyphLight.MAX,
     ) {
         val hasAmbient: Boolean get() = aLight > GlyphLight.OFF || bLight > GlyphLight.OFF
-        val isBlank: Boolean get() = cPercent == null && !hasAmbient
+        val isBlank: Boolean get() = (cPercent == null || cLight <= GlyphLight.OFF) && !hasAmbient
+        // displayProgress rebuilds its own frame at full intensity, ignoring input brightness.
+        val needsCustomFrame: Boolean get() = hasAmbient || cLight != GlyphLight.MAX
     }
 
     private val callback = object : GlyphManager.Callback {
@@ -120,9 +124,9 @@ class GlyphController(context: Context) {
     /**
      * Показать кадр.
      *
-     * Пока A и B погашены, полоса C рисуется родным `displayProgress` — именно он
-     * проверен на устройстве, и ломать его незачем. Как только появляется
-     * амбиентный канал, переходим на кадр, собранный вручную: подмешать A и B в
+     * При полной яркости C и погашенных A/B используем родной `displayProgress`.
+     * Он проверен на устройстве. Как только появляется
+     * амбиентный канал или выбрана меньшая яркость C, собираем кадр вручную: подмешать A и B в
      * `displayProgress` нельзя, он занимает кадр целиком.
      */
     fun show(request: Request) {
@@ -138,13 +142,13 @@ class GlyphController(context: Context) {
             return
         }
         // Режимы используют разные механизмы SDK, поэтому перед сменой гасим прошлый кадр.
-        val effectiveMode = if (request.hasAmbient) GlyphRenderMode.SEGMENTS else request.mode
+        val effectiveMode = if (request.needsCustomFrame) GlyphRenderMode.SEGMENTS else request.mode
         if (effectiveMode != lastMode) {
             runCatching { gm.turnOff() }
             lastMode = effectiveMode
         }
         try {
-            if (request.hasAmbient) {
+            if (request.needsCustomFrame) {
                 showComposite(gm, request)
             } else {
                 showProgressOnly(gm, request.cPercent ?: 0, request.mode)
@@ -180,42 +184,8 @@ class GlyphController(context: Context) {
      * пульсировало бы всё сразу.
      */
     private fun showComposite(gm: GlyphManager, request: Request) {
-        val builder = gm.glyphFrameBuilder
-        request.cPercent?.let { percent ->
-            litSegments(percent.coerceIn(0, 100), request.mode)
-                .forEach { builder.buildChannel(it, GlyphLight.MAX) }
-        }
-        val codes = ambientCodes() ?: return
-        if (request.aLight > GlyphLight.OFF) builder.buildChannel(codes.first, request.aLight)
-        if (request.bLight > GlyphLight.OFF) builder.buildChannel(codes.second, request.bLight)
-        gm.toggle(builder.build())
+        gm.toggle(compositeFrame(request, gm.glyphFrameBuilder))
     }
-
-    /** Коды сегментов, которые нужно зажечь под [percent]; порядок зависит от режима. */
-    private fun litSegments(percent: Int, mode: GlyphRenderMode): List<Int> {
-        val lit = (percent * SEGMENT_COUNT / 100.0).roundToInt().coerceIn(0, SEGMENT_COUNT)
-        if (lit == 0) return emptyList()
-        val codes = segmentCodes()
-        val ordered = if (mode == GlyphRenderMode.PROGRESS_REVERSED) codes.reversed() else codes
-        return ordered.take(lit)
-    }
-
-    /** C_1 внизу, C_24 наверху — порядок из документации Nothing для Phone (2a). */
-    private fun segmentCodes(): List<Int> = listOf(
-        Glyph.Code_23111.C_1, Glyph.Code_23111.C_2, Glyph.Code_23111.C_3,
-        Glyph.Code_23111.C_4, Glyph.Code_23111.C_5, Glyph.Code_23111.C_6,
-        Glyph.Code_23111.C_7, Glyph.Code_23111.C_8, Glyph.Code_23111.C_9,
-        Glyph.Code_23111.C_10, Glyph.Code_23111.C_11, Glyph.Code_23111.C_12,
-        Glyph.Code_23111.C_13, Glyph.Code_23111.C_14, Glyph.Code_23111.C_15,
-        Glyph.Code_23111.C_16, Glyph.Code_23111.C_17, Glyph.Code_23111.C_18,
-        Glyph.Code_23111.C_19, Glyph.Code_23111.C_20, Glyph.Code_23111.C_21,
-        Glyph.Code_23111.C_22, Glyph.Code_23111.C_23, Glyph.Code_23111.C_24,
-    )
-
-    /** Коды A и B. Оба канала есть и у (2a), и у (2a) Plus — таблица кодов общая. */
-    private fun ambientCodes(): Pair<Int, Int>? = runCatching {
-        Glyph.Code_23111.A to Glyph.Code_23111.B
-    }.getOrNull()
 
     fun turnOff() {
         pending = null
@@ -227,9 +197,46 @@ class GlyphController(context: Context) {
 
     private fun deviceCode(): String? = GlyphSupport.deviceCode()
 
-    private companion object {
-        const val TAG = "GlyphController"
-        const val SEGMENT_COUNT = 24
+    companion object {
+        private const val TAG = "GlyphController"
+        private const val SEGMENT_COUNT = 24
+
+        internal fun compositeFrame(request: Request, builder: GlyphFrame.Builder): GlyphFrame {
+            request.cPercent?.let { percent ->
+                litSegments(percent.coerceIn(0, 100), request.mode)
+                    .forEach { builder.buildChannel(it, request.cLight.coerceIn(GlyphLight.OFF, GlyphLight.MAX)) }
+            }
+            val codes = ambientCodes() ?: return builder.build()
+            if (request.aLight > GlyphLight.OFF) builder.buildChannel(codes.first, request.aLight)
+            if (request.bLight > GlyphLight.OFF) builder.buildChannel(codes.second, request.bLight)
+            return builder.build()
+        }
+
+        /** Коды сегментов, которые нужно зажечь под [percent]; порядок зависит от режима. */
+        private fun litSegments(percent: Int, mode: GlyphRenderMode): List<Int> {
+            val lit = (percent * SEGMENT_COUNT / 100.0).roundToInt().coerceIn(0, SEGMENT_COUNT)
+            if (lit == 0) return emptyList()
+            val codes = segmentCodes()
+            val ordered = if (mode == GlyphRenderMode.PROGRESS_REVERSED) codes.reversed() else codes
+            return ordered.take(lit)
+        }
+
+        /** C_1 внизу, C_24 наверху — порядок из документации Nothing для Phone (2a). */
+        private fun segmentCodes(): List<Int> = listOf(
+            Glyph.Code_23111.C_1, Glyph.Code_23111.C_2, Glyph.Code_23111.C_3,
+            Glyph.Code_23111.C_4, Glyph.Code_23111.C_5, Glyph.Code_23111.C_6,
+            Glyph.Code_23111.C_7, Glyph.Code_23111.C_8, Glyph.Code_23111.C_9,
+            Glyph.Code_23111.C_10, Glyph.Code_23111.C_11, Glyph.Code_23111.C_12,
+            Glyph.Code_23111.C_13, Glyph.Code_23111.C_14, Glyph.Code_23111.C_15,
+            Glyph.Code_23111.C_16, Glyph.Code_23111.C_17, Glyph.Code_23111.C_18,
+            Glyph.Code_23111.C_19, Glyph.Code_23111.C_20, Glyph.Code_23111.C_21,
+            Glyph.Code_23111.C_22, Glyph.Code_23111.C_23, Glyph.Code_23111.C_24,
+        )
+
+        /** Коды A и B. Оба канала есть и у (2a), и у (2a) Plus — таблица кодов общая. */
+        private fun ambientCodes(): Pair<Int, Int>? = runCatching {
+            Glyph.Code_23111.A to Glyph.Code_23111.B
+        }.getOrNull()
     }
 }
 

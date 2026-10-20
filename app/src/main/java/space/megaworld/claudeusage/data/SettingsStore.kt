@@ -160,6 +160,7 @@ class SettingsStore internal constructor(private val dataStore: DataStore<Prefer
                 ?: AmbientSettings.DEFAULT_IDLE_MINUTES,
             place = selected,
             places = places,
+            stripBrightnessPercent = (prefs[KEY_STRIP_BRIGHTNESS] ?: 100).coerceIn(0, 100),
         )
         AmbientState(settings, selected?.let { readRainForecasts(prefs)[it.id] })
     }
@@ -178,6 +179,10 @@ class SettingsStore internal constructor(private val dataStore: DataStore<Prefer
 
     suspend fun setStripMode(mode: GlyphStripMode) {
         dataStore.edit { it[KEY_STRIP_MODE] = mode.name }
+    }
+
+    suspend fun setStripBrightness(percent: Int) {
+        dataStore.edit { it[KEY_STRIP_BRIGHTNESS] = percent.coerceIn(0, 100) }
     }
 
     suspend fun setIdleThresholdMinutes(minutes: Int) {
@@ -316,6 +321,7 @@ class SettingsStore internal constructor(private val dataStore: DataStore<Prefer
         private val KEY_NIGHT_END = intPreferencesKey("glyph_night_end_minutes")
         private val KEY_GLYPH_MODE = stringPreferencesKey("glyph_render_mode")
         private val KEY_STRIP_MODE = stringPreferencesKey("glyph_strip_mode")
+        private val KEY_STRIP_BRIGHTNESS = intPreferencesKey("glyph_strip_brightness_percent")
         private val KEY_CHANNEL_A_MODE = stringPreferencesKey("glyph_channel_a_mode")
         private val KEY_CHANNEL_B_MODE = stringPreferencesKey("glyph_channel_b_mode")
         // Старые флаги читаем только при миграции; явный выбор канала имеет приоритет.

@@ -167,6 +167,7 @@ private fun AppRoot(onOpenLogin: () -> Unit, onOpenManualLogin: () -> Unit) {
                             onToggleGlyph = viewModel::setGlyphEnabled,
                             onSelectGlyphMode = viewModel::setGlyphRenderMode,
                             onSelectStripMode = viewModel::setStripMode,
+                            onSetStripBrightness = viewModel::setStripBrightness,
                             onSelectChannelMode = viewModel::setChannelMode,
                             onTestChannel = viewModel::testChannel,
                             onSelectIdleMinutes = viewModel::setIdleThresholdMinutes,

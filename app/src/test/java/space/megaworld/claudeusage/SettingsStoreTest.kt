@@ -351,6 +351,26 @@ class SettingsStoreTest {
         }
     }
 
+    @Test
+    fun `C brightness persists across reopening and changing strip functions`() = runTest {
+        val file = File(temporaryFolder.newFolder(), "settings.preferences_pb")
+        withStore(file) { settings, _ ->
+            assertEquals(100, settings.currentAmbient().stripBrightnessPercent)
+            settings.setStripBrightness(25)
+            settings.setStripMode(GlyphStripMode.OFF)
+            settings.setStripMode(GlyphStripMode.RAIN)
+            assertEquals(25, settings.currentAmbient().stripBrightnessPercent)
+        }
+        withStore(file) { settings, _ ->
+            assertEquals(25, settings.currentAmbient().stripBrightnessPercent)
+            assertEquals(GlyphStripMode.RAIN, settings.currentAmbient().stripMode)
+            settings.setStripBrightness(-10)
+            assertEquals(0, settings.currentAmbient().stripLight)
+            settings.setStripBrightness(200)
+            assertEquals(4000, settings.currentAmbient().stripLight)
+        }
+    }
+
     private suspend fun TestScope.withStore(
         file: File = File(temporaryFolder.newFolder(), "settings.preferences_pb"),
         block: suspend (SettingsStore, androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) -> Unit,

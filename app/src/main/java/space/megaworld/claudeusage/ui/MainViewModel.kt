@@ -112,6 +112,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         graph.usageRepository.setStripMode(mode)
     }
 
+    fun setStripBrightness(percent: Int) = runBusy {
+        graph.usageRepository.setStripBrightness(percent)
+    }
+
     fun setIdleThresholdMinutes(minutes: Int) = runBusy {
         graph.usageRepository.setIdleThresholdMinutes(minutes)
     }

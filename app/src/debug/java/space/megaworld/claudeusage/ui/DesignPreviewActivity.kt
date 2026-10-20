@@ -80,6 +80,7 @@ class DesignPreviewActivity : ComponentActivity() {
                                     onToggleGlyph = { state = state.copy(glyphEnabled = it) },
                                     onSelectGlyphMode = { state = state.copy(glyphRenderMode = it) },
                                     onSelectStripMode = { state = state.copy(ambient = state.ambient.copy(stripMode = it)) },
+                                    onSetStripBrightness = { state = state.copy(ambient = state.ambient.copy(stripBrightnessPercent = it)) },
                                     onSelectChannelMode = { channel, mode -> state = state.copy(ambient = if (channel == AmbientChannel.A)
                                         state.ambient.copy(channelA = mode) else state.ambient.copy(channelB = mode)) },
                                     onTestChannel = {}, onSelectIdleMinutes = { state = state.copy(ambient = state.ambient.copy(idleThresholdMinutes = it)) },

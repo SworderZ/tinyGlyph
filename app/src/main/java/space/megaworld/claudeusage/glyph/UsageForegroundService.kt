@@ -228,6 +228,7 @@ class UsageForegroundService : Service() {
             mode = state.glyphRenderMode,
             aLight = light(AmbientChannel.A),
             bLight = light(AmbientChannel.B),
+            cLight = state.ambient.stripLight,
         )
     }
 

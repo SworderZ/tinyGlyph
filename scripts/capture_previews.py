@@ -131,6 +131,27 @@ def main():
             open_page(screen, provider, scenario)
             name = f"{prefix}-{screen.lower()}-{provider.lower()}-{scenario}"
             xml = capture(name)
+            if screen == "GLYPH" and os.environ.get("PREVIEW_SCOPE") == "glyph":
+                # Exercise the brightness control above the bottom navigation at both font sizes.
+                for attempt in range(6):
+                    sliders = [n for n in ui_nodes() if "Яркость полосы C" in n.get("content-desc", "")]
+                    if sliders:
+                        bounds = list(map(int, re.findall(r"\d+", sliders[0].get("bounds"))))
+                        if bounds[3] < height - 420 and bounds[1] > 420:
+                            break
+                    adb("shell", "input", "swipe", str(width // 2), str(height - 420), str(width // 2), "450", "450")
+                else:
+                    raise RuntimeError("Strip C brightness slider is not reachable")
+                x1, y1, x2, y2 = bounds
+                x, y = (x1 + x2) // 2, (y1 + y2) // 2
+                adb("shell", "input", "tap", str(x), str(y))
+                if not any(n.get("text") == "50%" for n in ui_nodes()):
+                    raise RuntimeError("Brightness selection did not update its percentage")
+                capture(f"{name}-brightness-50")
+                adb("shell", "input", "swipe", str(x), str(y), str(x1 + 1), str(y), "450")
+                if not any(n.get("text") == "При 0% полоса C погашена." for n in ui_nodes()):
+                    raise RuntimeError("Zero brightness does not show the strip-off state")
+                capture(f"{name}-brightness-off")
             if screen == "LOGIN_GPT" and os.environ.get("PREVIEW_SCOPE") == "auth":
                 text = lambda value: lambda n: n.get("text") == value
                 if scenario == "pending":

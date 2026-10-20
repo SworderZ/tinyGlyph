@@ -22,7 +22,9 @@ data class AmbientSettings(
     val idleThresholdMinutes: Int = DEFAULT_IDLE_MINUTES,
     val place: WeatherPlace? = null,
     val places: List<WeatherPlace> = emptyList(),
+    val stripBrightnessPercent: Int = 100,
 ) {
+    val stripLight: Int get() = GlyphLight.MAX * stripBrightnessPercent.coerceIn(0, 100) / 100
     val idleEnabled: Boolean get() = channelA == GlyphChannelMode.IDLE || channelB == GlyphChannelMode.IDLE
     val rainEnabled: Boolean get() = channelA == GlyphChannelMode.RAIN || channelB == GlyphChannelMode.RAIN || stripMode == GlyphStripMode.RAIN
     val wantsWeather: Boolean get() = rainEnabled && place != null

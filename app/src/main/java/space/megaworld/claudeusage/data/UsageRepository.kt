@@ -253,6 +253,10 @@ class UsageRepository(
         if (mode == GlyphStripMode.RAIN) refreshWeatherIfStale()
     }
 
+    suspend fun setStripBrightness(percent: Int) {
+        settingsStore.setStripBrightness(percent)
+    }
+
     suspend fun setIdleThresholdMinutes(minutes: Int) {
         settingsStore.setIdleThresholdMinutes(minutes)
     }
