@@ -144,14 +144,14 @@ def main():
                     raise RuntimeError("Strip C brightness slider is not reachable")
                 x1, y1, x2, y2 = bounds
                 x, y = (x1 + x2) // 2, (y1 + y2) // 2
-                adb("shell", "input", "tap", str(x), str(y))
-                if not any(n.get("text") == "50%" for n in ui_nodes()):
+                adb("shell", "input", "swipe", str(x2 - 30), str(y), str(x), str(y), "600")
+                xml = capture(f"{name}-brightness-50")
+                if not any(n.get("text") == "50%" for n in ET.fromstring(xml).iter("node")):
                     raise RuntimeError("Brightness selection did not update its percentage")
-                capture(f"{name}-brightness-50")
                 adb("shell", "input", "swipe", str(x), str(y), str(x1 + 1), str(y), "450")
-                if not any(n.get("text") == "При 0% полоса C погашена." for n in ui_nodes()):
+                xml = capture(f"{name}-brightness-off")
+                if not any(n.get("text") == "При 0% полоса C погашена." for n in ET.fromstring(xml).iter("node")):
                     raise RuntimeError("Zero brightness does not show the strip-off state")
-                capture(f"{name}-brightness-off")
             if screen == "LOGIN_GPT" and os.environ.get("PREVIEW_SCOPE") == "auth":
                 text = lambda value: lambda n: n.get("text") == value
                 if scenario == "pending":
